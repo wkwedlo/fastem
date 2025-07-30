@@ -1,0 +1,42 @@
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+*.pyc
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+/build/
+
+# Eclipse projects
+.project
+.cproject
+.cdtproject
+.pydevproject
+/cmake-build*/
+/build/
+/.idea/
+/.settings/
+.vscode/*
+*/.ipynb_checkpoints/
