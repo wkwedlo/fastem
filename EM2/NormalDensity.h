@@ -46,6 +46,8 @@ public:
 	int GetDimension() const {return Dim;}
 	int ScanMatrix();
 	void Init(const EigenMatrix &aC,const EigenRowVector &aM);
+	void Init(const EigenAlignedMap &aC,const EigenRowVector &aM,EigenAlignedMap &rCholInvC);
+
 	NormalDensity(int aDim);
 	OPTFLOAT GetDensity(const OPTFLOAT * __restrict__ row);
     OPTFLOAT GetDensity(const float * __restrict__ row);

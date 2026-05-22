@@ -7,6 +7,8 @@
 #include <cmath>
 #ifdef EIGEN_USE_MKL_ALL
 #include <mkl.h>
+#else
+#include <cblas.h>
 #endif
 #include <Eigen/Dense>
 #include <Eigen/Cholesky>
@@ -44,7 +46,7 @@ void NormalDensity::Init(const EigenMatrix &aC,const EigenRowVector &aM) {
 	M=aM;
 	C=aC.selfadjointView<Eigen::Lower>();
 
-	Eigen::LLT<EigenMatrix> LLT(C);
+	Eigen::LLT<EigenMatrix,Eigen::Upper> LLT(C);
 	if (LLT.info()!=Eigen::Success)
 		throw EMException("Cholesky decomposition failed");
 
@@ -61,6 +63,30 @@ void NormalDensity::Init(const EigenMatrix &aC,const EigenRowVector &aM) {
 	CholInvC=EigenMatrix::Identity(Dim,Dim);
 	L.triangularView<Eigen::Lower>().solveInPlace(CholInvC);
 	CholInvC.transposeInPlace();
+
+}
+
+void NormalDensity::Init(const EigenAlignedMap &aC, const EigenRowVector &aM, EigenAlignedMap &rCholInvC) {
+	M=aM;
+	C=aC.selfadjointView<Eigen::Lower>();
+
+	Eigen::LLT<EigenMatrix,Eigen::Upper> LLT(C);
+	if (LLT.info()!=Eigen::Success)
+		throw EMException("Cholesky decomposition failed");
+
+	EigenMatrix L=LLT.matrixL();
+
+	LogDeterminant=2.0*L.diagonal().array().log().sum();
+	Determinant=std::exp(LogDeterminant);
+
+
+	LogCoeff=-0.5*Dim*log(2.0*M_PI)-0.5*LogDeterminant;
+	Coeff=std::exp(LogCoeff);
+	//TRACE4("Det: %g LogDet %g Coeff: %g LogCoeff: %g\n",Determinant,LogDet,Coeff,LogCoeff);
+
+	rCholInvC=EigenMatrix::Identity(Dim,Dim);
+	L.triangularView<Eigen::Lower>().solveInPlace(rCholInvC);
+	rCholInvC.transposeInPlace();
 
 }
 

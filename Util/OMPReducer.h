@@ -18,6 +18,7 @@ public:
     virtual ~OMPReducer() {;}
 };
 
+
 template <typename T> OMPReducer<T>::OMPReducer(const T &val) {
     int nThreads=omp_get_max_threads();
     ThreadData.SetSize(nThreads);
@@ -27,7 +28,6 @@ template <typename T> OMPReducer<T>::OMPReducer(const T &val) {
         ThreadData[tid]=val;
     }    
 }
-
 
 template <typename T> void OMPReducer<T>::ClearAllData() {
 #pragma omp parallel default(none)
@@ -43,7 +43,7 @@ public:
     virtual void ReduceToFirstThread();
     virtual void PrintInfo() {kma_printf("Naive OpenMP reducer\n");}
     NaiveOMPReducer(const T &val) : OMPReducer<T>(val) {}
-
+    template <class... Args> NaiveOMPReducer(Args &&...args) : OMPReducer<T>(args...) {}
 };
 
 
@@ -63,6 +63,7 @@ public:
     virtual void ReduceToFirstThread();
     virtual void PrintInfo() {kma_printf("Log2 OpenMP reducer\n");}
     Log2OMPReducer(const T &val) : OMPReducer<T>(val) {}
+    template <class... Args> Log2OMPReducer(Args &&...args) : OMPReducer<T>(args...) {}
 };
 
 

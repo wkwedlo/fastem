@@ -1,37 +1,60 @@
 #include <cmath>
 #include <unistd.h>
+#ifndef EIGEN_USE_MKL_ALL
+#include <cblas.h>
+#endif
+
 #include "../Util/ITAC.h"
 #include "../Util/Profiler.h"
 #include "../Util/OpenMP.h"
 #include "MatrixEM.h"
-
+#include "EMException.h"
 
 
 MatrixEMBase::MatrixEMBase(int ncols, long nrows, int ncl, const char *ReducerName, int anDensBlocks,int anMStepBlocks) :
-        EMAlgorithm(ncols,nrows,ncl) {
+        InvCholCovs(ncl,ncols), EMAlgorithm(ncols,nrows,ncl) {
 
     Step1ReducerData x(ncl,nCols);
-    Step2ReducerData y(ncl,nCols);
 
     if (ReducerName==nullptr || !strcmp(ReducerName,"naive")) {
         pReducer1=new NaiveOMPReducer<Step1ReducerData>(x);
-        pReducer2=new NaiveOMPReducer<Step2ReducerData>(y);
     } else if (!strcmp(ReducerName,"log2")) {
         pReducer1=new Log2OMPReducer<Step1ReducerData>(x);
-        pReducer2=new Log2OMPReducer<Step2ReducerData>(y);
-
     } else throw std::invalid_argument("Unknown OpenMP reducer name");
 
     PosteriorSum.resize(K);
     RowSum.resize(nCols);
-
+    int nThreads=omp_get_max_threads();
+    Step2CovSums.SetSize(nThreads);
+#pragma omp parallel default(none) firstprivate(ncl,ncols)
+    {
+        int tid=omp_get_thread_num();
+        Step2CovSums[tid].SetSize(ncl,ncols);
+    }
     _vt_funcdef("PrecomputeDensityMatrix",classID,&regionDensities);
 
 }
 
+void MatrixEMBase::InitDensities() {
+    int ErrorCount=0;
+    __EVENT_PROFILE_START("Cholesky");
+#pragma omp parallel for reduction(+:ErrorCount) OMPDYNAMIC
+    for(int i=0;i<K;i++) {
+        try {
+            Densities[i]->Init(Covs[i],Means.row(i),InvCholCovs[i]);
+        } catch (EMException &E) {
+            ErrorCount++;
+        }
+    }
+    __EVENT_PROFILE_STOP("Cholesky");
+    if (ErrorCount>0)
+        throw EMException("NormalDensity::Init failed inside a parallel region");
+}
+
+
+
 MatrixEMBase::~MatrixEMBase() {
     delete pReducer1;
-    delete pReducer2;
 }
 
 
@@ -71,10 +94,12 @@ void MatrixEMBase::BlockDensities(const EigenRowVector &LogDensCoeffs,
                                   Eigen::Map<EigenMatrix, 0, Eigen::OuterStride<>> &MappedPosteriors,
                                   EigenMatrix &TempDataset, EigenMatrix &LocalWeightDens, long DatasetOffset,
                                   long Count, OPTFLOAT &LogLike) {
+    int nStride=InvCholCovs.GetStride();
     for (int j = 0; j < K; j++) {
         TempDataset.middleRows(0,Count)= MappedData.middleRows(DatasetOffset,Count).rowwise() - Means.row(j);
-        cblas_dtrmm(CblasRowMajor, CblasRight, CblasUpper, CblasNoTrans, CblasNonUnit, Count, nCols, 1.0, Densities[j]->GetInvertedCholCov().data(),
-                    nCols, TempDataset.data(), nCols);
+
+        cblas_dtrmm(CblasRowMajor, CblasRight, CblasUpper, CblasNoTrans, CblasNonUnit, Count, nCols, 1.0, InvCholCovs[j].data(),
+                    nStride, TempDataset.data(), nCols);
         LocalWeightDens.col(j).middleRows(0,Count)=-0.5*TempDataset.middleRows(0,Count).array().square().rowwise().sum()+LogDensCoeffs[j];
     }
     PostProcessDensityMatrix(DatasetOffset, Count, MappedPosteriors, LocalWeightDens, LogLike);
@@ -92,7 +117,7 @@ void MatrixEMBase::BlockCovariances(const EigenMatrix &Means,
                                     Eigen::Map<const EigenMatrix, 0, Eigen::OuterStride<>> &MappedPosteriors, int tid,
                                     EigenMatrix &TempDataset, long DatasetOffset, long Count) {
     for (int j = 0; j < K; j++) {
-        EigenMatrix &tidCovSum = pReducer2->GetData(tid).CovSums[j];
+        EigenAlignedMap &tidCovSum = Step2CovSums[tid][j];
         ComputeWeightedTempDataset(j, DatasetOffset, Count, MappedData, MappedPosteriors, Means);
         tidCovSum.template selfadjointView<Eigen::Upper>().rankUpdate(TempDataset.middleRows(0,Count).transpose());
     }
@@ -124,7 +149,7 @@ void MatrixEM::CopyDataset(const MultithreadedDataset &Data) {
 
 
 void MatrixEM::PrecomputeDensityMatrix() {
-    __FUNC_PROFILE_START;
+    __EVENT_PROFILE_START("Estep");
     _vt_begin(regionDensities);
     long nRows=Dataset.GetRowCount();
     EigenRowVector LogDensCoeffs(K);
@@ -174,7 +199,7 @@ MatrixEM::MatrixEM(int ncols, long nrows, int ncl,const char *ReducerName, int a
 }
 
 
-void MatrixEM::doMStep(const LargeMatrix<OPTFLOAT> &Data,const LargeMatrix<OPTFLOAT> &Posteriors, DynamicArray<EigenMatrix> &Covs,
+void MatrixEM::doMStep(const LargeMatrix<OPTFLOAT> &Data,const LargeMatrix<OPTFLOAT> &Posteriors, CovMatrixArray &Covs,
                         EigenMatrix &Means,EigenVector &Probs)
 {
     __FUNC_PROFILE_START;
@@ -211,13 +236,12 @@ void MatrixEM::doMStep(const LargeMatrix<OPTFLOAT> &Data,const LargeMatrix<OPTFL
     __EVENT_PROFILE_STOP("MatrixEM::MStep means");
     _vt_begin(regionMStepCovs);
     __EVENT_PROFILE_START("MatrixEM::MStep covariances");
-    pReducer2->ClearAllData();
 #pragma omp parallel default(none) firstprivate(nRows) shared(MappedPosteriors,MappedData,Means)
     {
         int tid=omp_get_thread_num();
         auto &TempDataset=ThreadInfo[tid].TempDataset;
         long Offset,Count;
-
+        Step2CovSums[tid].ClearData();
         const long nBlocks=BMMStep.GetBlockCount();
         for(int k=0;k<nBlocks;k++) {
             long StartRow,BlockRows;
@@ -225,14 +249,16 @@ void MatrixEM::doMStep(const LargeMatrix<OPTFLOAT> &Data,const LargeMatrix<OPTFL
             BMMStep.GetThreadSubblock(StartRow,BlockRows,Offset,Count);
             BlockCovariances(Means, MappedData, MappedPosteriors, tid, TempDataset, StartRow+Offset, Count);
         }
+        Step2CovSums[tid].PackInPlace();
     }
     //__EVENT_PROFILE_START("OpenMP Reducer2");
     _vt_end(regionMStepCovs);
-    pReducer2->ReduceToFirstThread();
+    CovMatrixArray::SegmentedReduction(Step2CovSums);
     MPIReduceStep2Data();
+   Step2CovSums[0].UnpackInPlace();
     //__EVENT_PROFILE_STOP("OpenMP Reducer2");
     for(int j=0;j<K;j++) {
-        Covs[j]=pReducer2->GetData(0).CovSums[j];
+        Covs[j]=Step2CovSums[0][j];
         Covs[j].template triangularView<Eigen::Lower>()=Covs[j].transpose();
     }
     __EVENT_PROFILE_STOP("MatrixEM::MStep covariances");
@@ -273,7 +299,7 @@ SimpleMatrixEM::SimpleMatrixEM(int ncols, long nrows, int ncl,const char *Reduce
 }
 
 void SimpleMatrixEM::PrecomputeDensityMatrix() {
-    __FUNC_PROFILE_START;
+    __EVENT_PROFILE_START("EStep sequential");
     _vt_begin(regionDensities);
     long nRows=Dataset.GetRowCount();
     EigenRowVector LogDensCoeffs(K);
@@ -282,11 +308,10 @@ void SimpleMatrixEM::PrecomputeDensityMatrix() {
 
     Eigen::Map<const EigenMatrix,0,Eigen::OuterStride<> > MappedData(Dataset.GetData(),nRows,nCols,Eigen::OuterStride<>(Dataset.GetStride()));;
     Eigen::Map<EigenMatrix,0,Eigen::OuterStride<> > MappedPosteriors(Posteriors.GetData(),nRows,K,Eigen::OuterStride<>(Posteriors.GetStride()));
-
-
     eigen_disable_malloc();
-
     LogLike=0.0;
+    __EVENT_PROFILE_STOP("EStep sequential");
+    __EVENT_PROFILE_START("EStep");
 #pragma omp parallel  default (none) firstprivate(nRows) shared(LogDensCoeffs,MappedData,MappedPosteriors,stderr) reduction(+:LogLike)
     {
         long nBlocks=BMDens.GetBlockCount();
@@ -302,19 +327,62 @@ void SimpleMatrixEM::PrecomputeDensityMatrix() {
     }
     eigen_enable_malloc();
     _vt_end(regionDensities);
+    __EVENT_PROFILE_STOP("EStep");
+    __EVENT_PROFILE_START("Reductions MPI EStep");
     MPIReduceLogL(LogLike);
-    __FUNC_PROFILE_STOP;
+    __EVENT_PROFILE_STOP("Reductions MPI EStep");
 }
 
-void SimpleMatrixEM::doMStep(const LargeMatrix<OPTFLOAT> &Data,const LargeMatrix<OPTFLOAT> &Posteriors, DynamicArray<EigenMatrix> &Covs,
-                        EigenMatrix &Means,EigenVector &Probs)
+
+
+
+
+void SimpleMatrixEM::FillCovsAndRegularize(CovMatrixArray &Covs) {
+
+    __EVENT_PROFILE_START("MStep transpose and regularize");
+    constexpr  int BLOCK_SIZE = 32;
+    const int nStride = Covs.GetStride();
+    const OPTFLOAT MinusRegCoef = 1.0 - RegCoef;
+#pragma omp parallel for default(none) firstprivate(nStride,MinusRegCoef) shared(Covs)
+    for (int k = 0; k < K; ++k) {
+        OPTFLOAT RegCorrection=RegCoef*Step2CovSums[0][k].trace()/(OPTFLOAT)nCols;
+        const OPTFLOAT* pSrc = Step2CovSums[0][k].data();
+        OPTFLOAT * pDst = Covs[k].data();
+
+        for (int i_blk = 0; i_blk < nCols; i_blk += BLOCK_SIZE) {
+            for (int j_blk = i_blk; j_blk < nCols; j_blk += BLOCK_SIZE) {
+                int i_end = std::min(i_blk + BLOCK_SIZE, nCols);
+                int j_end = std::min(j_blk + BLOCK_SIZE, nCols);
+
+                for (int i = i_blk; i < i_end; ++i) {
+                    int j_start;
+                    if (i_blk==j_blk) {
+                        j_start=i+1;
+                        OPTFLOAT val= pSrc[i * nStride+ i]*MinusRegCoef+RegCorrection;
+                        pDst[i * nStride + i] = val;
+                    } else {
+                        j_start=j_blk;
+                    }
+                    for (int j = j_start; j < j_end; ++j) {
+                        OPTFLOAT val = pSrc[i * nStride + j]*MinusRegCoef;
+                        pDst[i * nStride + j] = val;
+                        pDst[j * nStride + i] = val;
+                    }
+                }
+            }
+        }
+    }
+    __EVENT_PROFILE_STOP("MStep transpose and regularize");
+}
+
+void SimpleMatrixEM::doMStep(const LargeMatrix<OPTFLOAT> &Data,const LargeMatrix<OPTFLOAT> &Posteriors, CovMatrixArray &Covs,
+                             EigenMatrix &Means,EigenVector &Probs)
 {
-    __FUNC_PROFILE_START;
     long nRows=Posteriors.GetRowCount();
     eigen_disable_malloc();
     Eigen::Map<const EigenMatrix,0,Eigen::OuterStride<> > MappedData(Data.GetData(),nRows,nCols,Eigen::OuterStride<>(Data.GetStride()));;
     Eigen::Map<const EigenMatrix,0,Eigen::OuterStride<> > MappedPosteriors(Posteriors.GetData(),nRows,K,Eigen::OuterStride<>(Posteriors.GetStride()));
-    __EVENT_PROFILE_START("SimpleMatrixEM::MStep means");
+    __EVENT_PROFILE_START("MStep means");
     _vt_begin(regionMStepMeans);
 #pragma omp parallel firstprivate(nRows) shared(MappedPosteriors,MappedData)
     {
@@ -337,14 +405,17 @@ void SimpleMatrixEM::doMStep(const LargeMatrix<OPTFLOAT> &Data,const LargeMatrix
         }
     }
     _vt_end(regionMStepMeans);
+    __EVENT_PROFILE_STOP("MStep means");
+    __EVENT_PROFILE_START("Reductions OpenMP means");
     pReducer1->ReduceToFirstThread();
+    __EVENT_PROFILE_STOP("Reductions OpenMP means");
+    __EVENT_PROFILE_START("Reductions MPI means");
     MPIReduceStep1Data();
+    __EVENT_PROFILE_STOP("Reductions MPI means");
     PosteriorSum=pReducer1->GetData(0).PosteriorSum;
     Means=pReducer1->GetData(0).MeanSums.array().colwise()/PosteriorSum.transpose().array();
-    __EVENT_PROFILE_STOP("SimpleMatrixEM::MStep means");
     _vt_begin(regionMStepCovs);
-    __EVENT_PROFILE_START("SimpleMatrixEM::MStep covariances");
-    pReducer2->ClearAllData();
+    __EVENT_PROFILE_START("MStep covariances");
 #pragma omp parallel default(none) firstprivate(nRows) shared(MappedPosteriors,MappedData,Means)
     {
         int tid=omp_get_thread_num();
@@ -355,25 +426,24 @@ void SimpleMatrixEM::doMStep(const LargeMatrix<OPTFLOAT> &Data,const LargeMatrix
         const long nBlocks=BMMStep.GetBlockCount();
         long PartitionStart,PartitionCount;
         BMMStep.GetThreadPartition(PartitionStart,PartitionCount);
+        Step2CovSums[tid].ClearData();
         for(int k=0;k<nBlocks;k++) {
             BMMStep.GetThreadBlock(k, PartitionCount, Offset, Count);
             BlockCovariances(Means, MappedData, MappedPosteriors, tid, TempDataset, PartitionStart+Offset, Count);
         }
+        Step2CovSums[tid].PackInPlace();
     }
     _vt_end(regionMStepCovs);
-    __EVENT_PROFILE_START("OpenMP Reducer2");
-    pReducer2->ReduceToFirstThread();
-    __EVENT_PROFILE_STOP("OpenMP Reducer2");
-    __EVENT_PROFILE_START("MPI Reducer2");
+    __EVENT_PROFILE_STOP("MStep covariances");
+    __EVENT_PROFILE_START("Reductions OpenMP covariances");
+    CovMatrixArray::SegmentedReduction(Step2CovSums);
+    __EVENT_PROFILE_STOP("Reductions OpenMP covariances");
+    __EVENT_PROFILE_START("Reductions MPI covariances");
     MPIReduceStep2Data();
-    __EVENT_PROFILE_STOP("MPI Reducer2");
-    for(int j=0;j<K;j++) {
-        Covs[j]=pReducer2->GetData(0).CovSums[j];
-        Covs[j].template triangularView<Eigen::Lower>()=Covs[j].transpose();
-    }
-    __EVENT_PROFILE_STOP("SimpleMatrixEM::MStep covariances");
+    Step2CovSums[0].UnpackInPlace();
+    __EVENT_PROFILE_STOP("Reductions MPI covariances");
+    FillCovsAndRegularize(Covs);
     Probs=PosteriorSum/(OPTFLOAT)TotalRowCount;
     eigen_enable_malloc();
-    __FUNC_PROFILE_STOP;
 }
 

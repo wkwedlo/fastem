@@ -65,7 +65,7 @@ void Step1ReducerData::UnpackData(const DynamicArray<OPTFLOAT> &Buff) {
 
 
 void Step2ReducerData::ClearData() {
-    int K=CovSums.GetSize();
+    int K=CovSums.GetComponentCount();
     int nCols=CovSums[0].cols();
     for(int i=0;i<K;i++) {
         CovSums[i]=EigenMatrix::Zero(nCols,nCols);
@@ -73,32 +73,30 @@ void Step2ReducerData::ClearData() {
 }
 
 Step2ReducerData & Step2ReducerData::operator+=(const Step2ReducerData &x) {
-    int K=CovSums.GetSize();
-    ASSERT(K==x.CovSums.GetSize());
-    for(int i=0;i<K;i++) {
-        CovSums[i]+=x.CovSums[i];
-    }    
+    int K=CovSums.GetComponentCount();
+    ASSERT(K==x.CovSums.GetComponentCount());
+    CovSums+=x.CovSums;
     return *this;
 }
 
-Step2ReducerData::Step2ReducerData(int K,int nCols) {
-    CovSums.SetSize(K);
-    for(int i=0;i<K;i++)
-        CovSums[i].resize(nCols,nCols);
+Step2ReducerData::Step2ReducerData(int K,int nCols) : CovSums(K,nCols){
+}
+
+Step2ReducerData::Step2ReducerData() {
 }
 
 int Step2ReducerData::GetPackSize() {
-    int K=CovSums.GetSize();
-    int nCols=CovSums[0].cols();
+    int K=CovSums.GetComponentCount();
+    int nCols=CovSums.GetDimension();
     return K*nCols*(nCols+1)/2;
 }
 
 void Step2ReducerData::PackData(DynamicArray<OPTFLOAT> &Buff) {
-    int K=CovSums.GetSize();
-    int nCols=CovSums[0].cols();
+    int K=CovSums.GetComponentCount();
+    int nCols=CovSums.GetDimension();
     int Cntr=0;
     for (int k=0;k<K;k++) {
-        const EigenMatrix &CovSum=CovSums[k];
+        const auto &CovSum=CovSums[k];
         for(int i=0;i<nCols;i++)
             for(int j=i;j<nCols;j++)
                 Buff[Cntr++]=CovSum(i,j);
@@ -106,11 +104,11 @@ void Step2ReducerData::PackData(DynamicArray<OPTFLOAT> &Buff) {
 }
 
 void Step2ReducerData::UnpackData(const DynamicArray<OPTFLOAT> &Buff) {
-    int K=CovSums.GetSize();
-    int nCols=CovSums[0].cols();
+    int K=CovSums.GetComponentCount();
+    int nCols=CovSums.GetDimension();
     int Cntr=0;
     for (int k=0;k<K;k++) {
-        EigenMatrix &CovSum=CovSums[k];
+        auto &CovSum=CovSums[k];
         for(int i=0;i<nCols;i++)
             for(int j=i;j<nCols;j++)
                 CovSum(i,j)=Buff[Cntr++];

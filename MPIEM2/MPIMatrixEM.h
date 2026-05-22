@@ -13,7 +13,6 @@ class MPIMatrixEM : public MatrixEM {
 protected:
     virtual void MPIReduceLogL(OPTFLOAT &aLogl);
     MPIUniversalReducer<Step1ReducerData> *pMPIReducer1;
-    MPIUniversalReducer<Step2ReducerData> *pMPIReducer2;
 
     virtual void MPIReduceStep1Data();
     virtual void MPIReduceStep2Data();
@@ -27,7 +26,6 @@ class SimpleMPIMatrixEM : public SimpleMatrixEM {
 protected:
     virtual void MPIReduceLogL(OPTFLOAT &aLogl);
     MPIUniversalReducer<Step1ReducerData> *pMPIReducer1;
-    MPIUniversalReducer<Step2ReducerData> *pMPIReducer2;
     virtual void MPIReduceStep1Data();
     virtual void MPIReduceStep2Data();
 public:

@@ -13,6 +13,7 @@
 #include "Optfloat.h"
 #include "../Util/Array.h"
 #include "../Util/LargeMatrix.h"
+#include "Partition.h"
 
 /**
  * @brief Class for storing large datasets in memory
@@ -119,6 +120,7 @@ public:
 	
 	virtual void Save(char* fname);
 	
+	void Filter(MultithreadedDataset &D,Partition &P,int ClassNum);
 	///Just reserves memory:
 	long AllocateMemory(long rows, int cols);
 	

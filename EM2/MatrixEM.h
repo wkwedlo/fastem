@@ -1,16 +1,16 @@
 #ifndef EM2_MATRIXEM_H_
 #define EM2_MATRIXEM_H_
 
-#include "CachedEM.h"
+#include "EMAlgorithm.h"
 #include "BlockManager.h"
-
+#include "OpenMPEMReducer.h"
+#include "../Util/OMPReducer.h"
 
 
 class MatrixEMBase : public EMAlgorithm {
 protected:
     OMPReducer<Step1ReducerData> *pReducer1;
-    OMPReducer<Step2ReducerData> *pReducer2;
-
+    DynamicArray<CovMatrixArray> Step2CovSums;
 
     struct alignas(64) ThreadPrivateData {
         EigenMatrix TempDataset;
@@ -18,6 +18,8 @@ protected:
         EigenVector WeightedDensSum;
     };
 
+    virtual void InitDensities();
+    CovMatrixArray InvCholCovs;
     DynamicArray<ThreadPrivateData> ThreadInfo;
 
     EigenRowVector PosteriorSum;
@@ -70,7 +72,7 @@ protected:
     virtual void EStep() {}
     virtual void MStep();
     virtual void CopyDataset(const MultithreadedDataset &Data);
-    void doMStep(const LargeMatrix<OPTFLOAT> &Data,const LargeMatrix<OPTFLOAT> &Posteriors, DynamicArray<EigenMatrix> &Covs,
+    void doMStep(const LargeMatrix<OPTFLOAT> &Data,const LargeMatrix<OPTFLOAT> &Posteriors, CovMatrixArray &Covs,
                EigenMatrix &Means,EigenVector &Probs);
 
 
@@ -89,9 +91,11 @@ protected:
     virtual void PrecomputeDensityMatrix();
     virtual void EStep() {}
     virtual void MStep();
-    void doMStep(const LargeMatrix<OPTFLOAT> &Data,const LargeMatrix<OPTFLOAT> &Posteriors, DynamicArray<EigenMatrix> &Covs,
+    void FillCovsAndRegularize(CovMatrixArray &Covs);
+    void doMStep(const LargeMatrix<OPTFLOAT> &Data,const LargeMatrix<OPTFLOAT> &Posteriors, CovMatrixArray &Covs,
                  EigenMatrix &Means,EigenVector &Probs);
 
+    void RegularizeCovariances() override {}
 
 public:
     SimpleMatrixEM(int ncols, long nrows, int ncl, const char *ReducerName,int anDensBlocks=1,int anMStepBlocks=1);

@@ -12,6 +12,7 @@
 #include <stdio.h>
 
 #include "NormalDensity.h"
+#include "CovMatrixArray.h"
 #include "../Util/MultithreadedDataset.h"
 
 class GaussianMixture {
@@ -35,6 +36,8 @@ public:
 	const EigenMatrix GetCovariance(int Component) const {return Densities[Component]->GetCovariance();}
 	const EigenRowVector GetMean(int Component) const {return Densities[Component]->GetMean();}
 	void Init(const DynamicArray<OPTFLOAT> &aWeights,const DynamicArray<EigenMatrix> &aCovs,const EigenMatrix &aMeans);
+	void Init(const DynamicArray<OPTFLOAT> &aWeights,const CovMatrixArray &aCovs,const EigenMatrix &aMeans);
+
 	void InitComponent(int Component,OPTFLOAT Weight,const EigenMatrix &Cov,const EigenRowVector &Mean);
 	void NormalizeWeights();
 

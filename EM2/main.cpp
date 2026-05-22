@@ -17,10 +17,10 @@
 #include "../Util/Compiler.h"
 #include "../Util/ThreadAffinityInfo.h"
 #include "../Util/Profiler.h"
+#include "../Util/Likwid.h"
 
 #include "EMArgs.h"
 #include "MatrixEM.h"
-#include "CachedEM.h"
 #include "GaussianMixture.h"
 #include "EMInitializer.h"
 #include "EMException.h"
@@ -60,7 +60,6 @@ void RunEM() {
 	BlockManagerBase::ParseEMBlockParams(msteploopparam,nRows,nCols,ncl,nDensBlocks,nMStepBlocks);
 	int nBlocks=std::max(nDensBlocks,nMStepBlocks);
 	MultithreadedDataset D(nBlocks);
-
 	kma_printf("Loading dataset %s... ",fname);
 	PrecisionTimer T(CLOCK_MONOTONIC);
 	D.Load(fname);
@@ -94,10 +93,16 @@ void RunEM() {
 			kma_printf("Burn-in iter time: %g miliseconds\n",1000.0*extime/(double)IterCount);
 		}
 		pA->SetParameters(maxiter,Eps,athr,regcoeff);
-		T.Reset();
+
+#pragma omp  parallel
+        {
+            __likwid_markerStartRegion("Benchmark");
+        }
+        T.Reset();
 #ifdef INTEL_ITT
         __itt_resume();
 #endif
+		__RESET_PROFILES;
 		if (burnin>0) {
             LogL=pA->TrainNoCopy(G,verbosity,svd);
         } else {
@@ -106,7 +111,10 @@ void RunEM() {
 #ifdef INTEL_ITT
         __itt_pause();
 #endif
-
+#pragma omp  parallel
+        {
+            __likwid_markerStopRegion("Benchmark");
+        }
         if (verbosity>3)
 			G.Dump();
 	} catch (EMException &E) {
@@ -123,6 +131,7 @@ void RunEM() {
     }
 	delete pInit;
 	delete pA;
+
 }
 
 
@@ -133,6 +142,12 @@ int main(int argc, char *argv[])
 #ifdef INTEL_ITT
     __itt_pause();
 #endif
+    __likwid_markerInit();
+#pragma omp  parallel
+    {
+        __likwid_markerThreadInit();
+    }
+
     StandardStdOut::Init();
 	Eigen::initParallel();
 	char hostname[1024];
@@ -155,5 +170,6 @@ int main(int argc, char *argv[])
 	} catch (std::invalid_argument &E) {
 		kma_printf("Invalid program argument: %s\n",E.what());
 	}
-	return 0;
+    __likwid_markerClose();
+    return 0;
 }

@@ -25,6 +25,14 @@ void GaussianMixture::Init(const DynamicArray<OPTFLOAT> &aWeights,const DynamicA
 		Densities[i]->Init(aCovs[i],aMeans.row(i));
 }
 
+void GaussianMixture::Init(const DynamicArray<OPTFLOAT> &aWeights,const CovMatrixArray &aCovs,const EigenMatrix &aMeans) {
+
+	Weights=aWeights;
+	for(int i=0;i<nComponents;i++)
+		Densities[i]->Init(aCovs[i],aMeans.row(i));
+}
+
+
 void GaussianMixture::InitComponent(int Component,OPTFLOAT Weight,const EigenMatrix &Cov,const EigenRowVector &Mean) {
 	Weights[Component]=Weight;
 	Densities[Component]->Init(Cov,Mean);

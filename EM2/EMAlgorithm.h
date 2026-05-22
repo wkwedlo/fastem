@@ -15,6 +15,7 @@
 
 #include "NormalDensity.h"
 #include "GaussianMixture.h"
+#include "CovMatrixArray.h"
 
 struct ThreadData {
 	DynamicArray <OPTFLOAT> arrF;
@@ -42,7 +43,7 @@ protected:
     LargeMatrix<OPTFLOAT> Dataset;
 
 
-	DynamicArray<EigenMatrix> Covs;
+	CovMatrixArray Covs;
 	EigenMatrix Means;
 	EigenVector Probs;
 	DynamicArray<NormalDensity *>Densities;
@@ -61,7 +62,7 @@ protected:
 	virtual OPTFLOAT ComputeLogLike()=0;
 	virtual void MStep()=0;
     virtual void CopyDataset(const MultithreadedDataset &Data);
-    void RegularizeCovariances();
+    virtual void RegularizeCovariances();
 public:
 	void ComputePosterriorCorrelation(EigenMatrix &Corr);
 	void RetrieveClasses(LargeVector<int> &Classes) const;

@@ -26,6 +26,7 @@ char *msteploopparam=nullptr;
 
 char *numaname=nullptr;
 char *numaparam=nullptr;
+char *profilename=nullptr;
 
 int seed;
 int ncl=1;
@@ -61,7 +62,8 @@ void ExitUsage() {
     printf("-T fname outputs thread placement info to file fname\n");
     printf("-u alloc use NUMA allocator alloc\n");
     printf("-U allocparam use NUMA allocator parameter allocparam\n");
-    printf("-g coeff use regularization coefficient for covariance matrices, default 0.0\n");
+	printf("-g coeff use regularization coefficient for covariance matrices, default 0.0\n");
+	printf("-p profile dump profiling information to file profile\n");
 
 	printf("-S disables svd\n");
 	printf("-v verbosity\n");
@@ -72,7 +74,7 @@ void ExitUsage() {
 int ProcessArgs(int argc, char *argv[])
 {
 	int c;
-	while ((c=getopt(argc,argv,"BN:M:o:O:r:c:t:m:f:a:A:Sv:R:T:I:u:U:b:g:"))!=-1){
+	while ((c=getopt(argc,argv,"BN:M:o:O:r:c:t:m:f:a:A:Sv:R:T:I:u:U:b:g:p:"))!=-1){
 		switch(c) {
         case 'u':
             numaname=optarg;
@@ -132,8 +134,11 @@ int ProcessArgs(int argc, char *argv[])
 					}
 					break;
 			case 't':
-					init=optarg;
-					break;
+				init=optarg;
+				break;
+			case 'p':
+				profilename=optarg;
+				break;
 
 			case 'm':
 					maxiter=atoi(optarg);

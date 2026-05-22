@@ -18,11 +18,11 @@ protected:
     DynamicArray<OPTFLOAT> RecvBuffer;
 
 public:
-    MPIUniversalReducer(T x);
+    MPIUniversalReducer(T &x);
     void AllReduce(T &x);
 };
 
-template <typename T> MPIUniversalReducer<T>::MPIUniversalReducer(T x) {
+template <typename T> MPIUniversalReducer<T>::MPIUniversalReducer(T &x) {
     int Size=x.GetPackSize();
     SendBuffer.SetSize(Size);
     RecvBuffer.SetSize(Size);

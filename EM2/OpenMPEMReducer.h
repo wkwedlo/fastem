@@ -10,8 +10,7 @@
 
 #include "../Util/EigenUtil.h"
 #include "../Util/Array.h"
-#include "../Util/OMPReducer.h"
-
+#include "CovMatrixArray.h"
 
 struct Step1ReducerData {
 		EigenRowVector PosteriorSum;
@@ -27,11 +26,14 @@ struct Step1ReducerData {
 };
 
 struct Step2ReducerData {
-		DynamicArray<EigenMatrix> CovSums;
+		CovMatrixArray CovSums;
 		void ClearData();
 		Step2ReducerData &operator+=(const Step2ReducerData &x);
 		Step2ReducerData(int K,int nCols);
-		Step2ReducerData() {}
+		Step2ReducerData();
+
+		void PackInPlace() {CovSums.PackInPlace();}
+		void UnpackInPlace() {CovSums.UnpackInPlace();}
 
         int GetPackSize();
         void PackData(DynamicArray<OPTFLOAT> &Buff);

@@ -22,7 +22,7 @@ extern char *mname;
 extern char *affname;
 extern char *numaname;
 extern char *numaparam;
-
+extern char *profilename;
 
 extern int seed;
 extern int ncl;

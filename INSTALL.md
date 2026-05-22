@@ -81,7 +81,7 @@ mpirun mpiem2_icc_openmp_release_double_mkl_master -c 200 -v 0 emnistpca300.bin 
 ```
 
 Command line options:
-- -c 200: number of micxture components
+- -c 200: number of mixture components
 - -v 0: verbosity level
 - -I emnistpca300_k200_kmeansoror.cmp: input file with the initial solution
 - -A simplematrixem: algorithm to use. This chooses the FastEM algorithm from the paper.

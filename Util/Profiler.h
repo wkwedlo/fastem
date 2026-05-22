@@ -12,19 +12,25 @@
 void __profile_start_timing(const std::string event);
 void __profile_stop_timing(const std::string event);
 void __dump_profiles();
+void __dump_profiles_to_file(char *fname);
+void __reset_profiles();
 
 #ifdef PROFILER
 #define __FUNC_PROFILE_START __profile_start_timing(__PRETTY_FUNCTION__)
 #define __FUNC_PROFILE_STOP __profile_stop_timing(__PRETTY_FUNCTION__)
 #define __DUMP_PROFILES __dump_profiles()
+#define __RESET_PROFILES __reset_profiles()
 #define __EVENT_PROFILE_START(x) __profile_start_timing(x)
 #define __EVENT_PROFILE_STOP(x) __profile_stop_timing(x)
+#define __DUMP_PROFILES_TO_FILE(x) __dump_profiles_to_file(x)
 #else
 #define __FUNC_PROFILE_START
 #define __FUNC_PROFILE_STOP
 #define __DUMP_PROFILES
+#define __RESET_PROFILES
 #define __EVENT_PROFILE_START(x)
 #define __EVENT_PROFILE_STOP(x)
+#define __DUMP_PROFILES_TO_FILE(x)
 #endif
 
 

@@ -9,15 +9,28 @@
 #define UTIL_EIGENUTIL_H_
 
 #include <stdio.h>
+#ifdef EIGEN_USE_MKL_ALL
+#include <mkl.h>
+#endif
 
 #include <Eigen/Dense>
 #include "NumaAlloc.h"
 #include "../Util/Optfloat.h"
 
-typedef Eigen::Matrix<OPTFLOAT,Eigen::Dynamic,Eigen::Dynamic,Eigen::RowMajor> EigenMatrix;
-typedef Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic,Eigen::RowMajor> EigenFloatMatrix;
-typedef Eigen::Matrix<OPTFLOAT,Eigen::Dynamic,1> EigenVector;
-typedef Eigen::Matrix<OPTFLOAT,1,Eigen::Dynamic> EigenRowVector;
+// #ifdef __AVX512F__
+constexpr int kAlignBytes = 64;
+constexpr auto kEigenAlignTag = Eigen::Aligned64;
+// #else
+// constexpr int kAlignBytes = 32;
+// constexpr auto kEigenAlignTag = Eigen::Aligned32;
+// #endif
+
+
+using EigenMatrix = Eigen::Matrix<OPTFLOAT,Eigen::Dynamic,Eigen::Dynamic,Eigen::RowMajor>;
+using EigenFloatMatrix= Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic,Eigen::RowMajor>;
+using EigenVector=Eigen::Matrix<OPTFLOAT,Eigen::Dynamic,1> ;
+using EigenRowVector=Eigen::Matrix<OPTFLOAT,1,Eigen::Dynamic> ;
+using EigenAlignedMap = Eigen::Map<EigenMatrix, kEigenAlignTag, Eigen::OuterStride<Eigen::Dynamic>>;
 
 
 void print(const EigenRowVector &V, FILE *stream=stdout);

@@ -10,13 +10,11 @@
 
 #include "EMAlgorithm.h"
 #include "EMException.h"
-#include "CachedEM.h"
 #include "MatrixEM.h"
 
-#include "../Util/OpenMP.h"
+#include "../Util/Profiler.h"
 #include "../Util/StdOut.h"
 #include "../Util/NumaAlloc.h"
-#include "../Util/Rand.h"
 #include "../Util/PrecisionTimer.h"
 
 
@@ -29,7 +27,7 @@ void EMAlgorithm::SetParameters(int aMaxSweeps,double aEps,double aAbortThr,doub
     RegCoef=aRegCoeff;
 }
 
-EMAlgorithm::EMAlgorithm(int ncols,long nrows,int ncl) {
+EMAlgorithm::EMAlgorithm(int ncols,long nrows,int ncl) : Covs(ncl,ncols){
 	K=ncl;
 	nCols=ncols;
 	IterCounter=0;
@@ -46,13 +44,11 @@ EMAlgorithm::EMAlgorithm(int ncols,long nrows,int ncl) {
 
     Posteriors.SetSize(nrows,K,1,false);
     Dataset.SetSize(nrows,nCols,1,false);
-	Covs.SetSize(K);
 	Means.resize(K,nCols);
 	Densities.SetSize(K);
 	Probs.resize(K);
 	PLLs.SetSize(K);
 	for(int i=0;i<K;i++) {
-		Covs[i].resize(nCols,nCols);
 		Densities[i]=new NormalDensity(nCols);
 	}
 	OMPData.SetSize(omp_get_max_threads());
@@ -74,6 +70,7 @@ EMAlgorithm::~EMAlgorithm() {
 
 void EMAlgorithm::InitDensities() {
 	int ErrorCount=0;
+	__EVENT_PROFILE_START("Cholesky");
 #pragma omp parallel for reduction(+:ErrorCount) OMPDYNAMIC
 	for(int i=0;i<K;i++) {
 		try {
@@ -82,6 +79,7 @@ void EMAlgorithm::InitDensities() {
 			ErrorCount++;
 		}
 	}
+	__EVENT_PROFILE_STOP("Cholesky");
 	if (ErrorCount>0)
 		throw EMException("NormalDensity::Init failed inside a parallel region");
 }
@@ -142,7 +140,6 @@ OPTFLOAT EMAlgorithm::TrainNoCopy(GaussianMixture &G, int Verbosity, bool SVD)
 	DecodeMixture(G);
 	OPTFLOAT PrevLogL=-std::numeric_limits<OPTFLOAT>::max(),LogL=PrevLogL;
 	OPTFLOAT MaxCond=0.0;
-    RegularizeCovariances();
 	InitDensities();
 	if (SVD) {
 		MaxCond=FindLargestConditionNumber();
@@ -235,12 +232,14 @@ void EMAlgorithm::CopyDataset(const MultithreadedDataset &Data) {
 }
 
 void EMAlgorithm::RegularizeCovariances() {
-    eigen_disable_malloc();
+	__EVENT_PROFILE_START("MStep regularize");
+	eigen_disable_malloc();
     for(int j=0;j<K;j++) {
         OPTFLOAT Trace=Covs[j].trace();
         Covs[j]=Covs[j]*(1.0-RegCoef)+RegCoef*Trace/(OPTFLOAT)nCols*EigenMatrix::Identity(nCols,nCols);
     }
     eigen_enable_malloc();
+	__EVENT_PROFILE_STOP("MStep regularize");
 }
 
 
@@ -257,12 +256,6 @@ EMAlgorithm *CreateEMAlgorithm(const char *Name,const char *RName,const char *MN
                 return new SimpleMatrixEM(nCols, nRows, nCl, RName,Param1,Param2);
             }
         }
-	}
-	if (!strcmp(Name,"cachedem")) {
-		int Param1,Param2;
-		BlockManagerBase::ParseEMBlockParams(MStepLoopParam,nRows,nCols,nCl,Param1,Param2);
-		kma_printf("Blocks in density computation: %d, in Covariance computation: %d\n",Param1,Param2);
-        return new CachedEM(nCols,nRows,nCl,RName,Param1,Param2);
 	}
 
 	throw std::invalid_argument("Unknown EM algorithm");

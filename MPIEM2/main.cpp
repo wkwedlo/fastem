@@ -12,6 +12,7 @@
 #include "../MPIKmeans/MPIRank0StdOut.h"
 
 #include "../Util/OpenMP.h"
+#include "../Util/Likwid.h"
 #include "../Util/Compiler.h"
 #include "../Util/Rand.h"
 #include "../Util/PrecisionTimer.h"
@@ -22,7 +23,6 @@
 
 
 #include "MPIJainEMInitializer.h"
-#include "MPICachedEM.h"
 #include "MPIMatrixEM.h"
 
 
@@ -64,13 +64,6 @@ EMAlgorithm *CreateMPIEMAlgorithm(const char *Name,const char *RName,char *MName
         return new SimpleMPIMatrixEM(nCols, nRows, nCl,RName, Param1,Param2);
     }
 
-    if (!strcmp(Name,"cachedem")) {
-    	int nRows=D.GetRowCount();
-    	int Param1,Param2;
-    	BlockManagerBase::ParseEMBlockParams(msteploopparam,nRows,nCols,nCl,Param1,Param2);
-    	kma_printf("Blocks in density computation: %d, in Covariance computation: %d\n",Param1,Param2);
-        return new MPICachedEM(D.GetColCount(),D.GetRowCount(),nCl,RName,Param1,Param2);
-    }
     throw std::invalid_argument("Unknown EM algorithm");
 }
 
@@ -104,7 +97,14 @@ int main(int argc, char *argv[])
 #ifdef INTEL_ITT
     __itt_pause();
 #endif
-	int Rank,Size;
+
+    __likwid_markerInit();
+#pragma omp  parallel
+    {
+        __likwid_markerThreadInit();
+    }
+
+    int Rank,Size;
 #ifdef _OPENMP
 	int Provided;
 	MPI_Init_thread(&argc,&argv,MPI_THREAD_FUNNELED,&Provided);
@@ -182,10 +182,19 @@ int main(int argc, char *argv[])
 #ifdef INTEL_ITT
             __itt_resume();
 #endif
+#pragma omp  parallel
+            {
+                __likwid_markerStartRegion("Benchmark");
+            }
+			__RESET_PROFILES;
             if (burnin>0) {
                 LogL=pA->TrainNoCopy(G,verbosity,svd);
             } else {
                 LogL=pA->Train(D,G,verbosity,svd);
+            }
+#pragma omp  parallel
+            {
+                __likwid_markerStopRegion("Benchmark");
             }
 #ifdef INTEL_ITT
             __itt_pause();
@@ -203,6 +212,11 @@ int main(int argc, char *argv[])
 		kma_printf("Iteration time: %g miliseconds\n",1000.0*extime2/(double)IterCount);
         kma_printf("Final loglikelihood: %g\n",LogL);
 		__DUMP_PROFILES;
+		char ProfileFileName[256];
+		if (profilename!=nullptr) {
+			snprintf(ProfileFileName,256,profilename,Rank);
+			__DUMP_PROFILES_TO_FILE(ProfileFileName);
+		}
 		DestroyRNGs();
 	} catch (std::invalid_argument &E) {
 		kma_printf("Invalid program argument: %s\n",E.what());
@@ -210,4 +224,5 @@ int main(int argc, char *argv[])
 
 	MPI_Finalize();
 	StdOut::Destroy();
+    __likwid_markerClose();
 }
