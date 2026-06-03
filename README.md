@@ -1,18 +1,18 @@
 ## Recommended operating system
-- Should work on any Linux distribution, the code was initially developed on Ubuntu 22.04
-- Production runs for experiments reported in the paper were done on a cluster using Rocky Linux 8 in compute nodes.
+- Should work on any Linux distribution, the code was initially developed on Ubuntu 22.04 LTS
+- Experiments for Intel Xeon architecture reported in the paper were run on a cluster using Rocky Linux 8 in Intel compute nodes. The compiler was `icpc version 2021.10.0 (gcc version 8.5.0 compatibility)`
+- Experiments for AMD EPYC architecture reported in the paper were run on a system with Ubuntu 22.04 LTS. The compiler was 
+AMD AOCC (`AMD clang version 17.0.6 (CLANG: AOCC_5.0.0-Build#1377 2024_09_24)`). The BLAS routines were provided by AMD AOCL library compiled by the AOCC compiler. The MPI library for AMD EPYC was Intel MPI from the oneAPI package.
+
 
 
 ## Requirements 
 - libnuma-dev
-- Cmake >= 3.25. See instruction [here](https://apt.kitware.com/) for the latest version for Ubuntu 22.04 
-- Intel OneAPI toolkit. See instruction [here](https://www.intel.com/content/www/us/en/docs/oneapi/installation-guide-linux/2024-2/apt.html). Both the basekit and the HPC kit are required. Please install 
-  an older version using the command `apt install intel-basekit-2023.2.0 intel-hpckit-2023.2.0` (for Debian-based systems) 
-as the newest versions lack `icpc` compiler and will not compile the code.
-- Alternatively you should be able to use GCC if you comment out the CXX and CC variable in the shell script. In this case
-you still need Intel OneAPI for the MKL and probably for the MPI library.
-- In theory, it should be possible to build with another BLAS library but this would require some changes in the code and heavy changes in the CMake files.
-
+- Cmake >= 3.26. See instruction [here](https://apt.kitware.com/) for the latest version for Ubuntu 22.04 
+- Intel OneAPI toolkit for Intel systems. See instruction [here](https://www.intel.com/content/www/us/en/docs/oneapi/installation-guide-linux/2024-2/apt.html). Both the basekit and the HPC kit are required. To replicate exactly the experiments from the paper using icpc compiler please install an older version using the command `apt install intel-basekit-2023.2.0 intel-hpckit-2023.2.0` (for Debian-based systems) 
+as the newest versions lack `icpc`. Note: icpc compiler breaks down compilation on 
+newer Linux systems. In such case use Intel icpx or g++ compiler.
+- [AMD AOCC compiller] (https://www.amd.com/en/developer/aocc.html) and [AMD AOCL library](https://www.amd.com/en/developer/aocl.html) for AMD EPYC systems. Note that you still need an MPI library (we used MPI from Intel oneAPI in our EPYC experiments)
 ## Installation of git submodule with Eigen C++ library
 ```
 git submodule update --init
@@ -20,18 +20,54 @@ git submodule update --init
 
 
 ## Compilation and install
+### Intel icpc compiler
+Use the environment variable `ICCOPT` to set CPU architecture optimization options. For experiments reported in the paper (Intel Xeon Platinum 8268) we set `-march=cascadelake`
+
 ```
 #Initialize oneAPI e.g.,    . /opt/intel/oneapi/setvars.sh
-./cmake-compile-local-default.sh 
+./cmake-compile-icpc.sh 
 ```
-The compiled and installed binaries are in the `~/bin` directory. The following binaries should be created (all have long suffixed names depending on project options):
+
+### GCC compiler
+Use the environment variable `GCCOPT` to set CPU architecture optimization options. For experiments reported in the paper (Intel Xeon Platinum 8268) we set `-march=cascadelake` for Intel Xeon nodes.
+
+```
+#Initialize oneAPI e.g.,    . /opt/intel/oneapi/setvars.sh
+./cmake-compile-gcc.sh 
+```
+
+### Intel ICPX compiler
+Use the environment variable `ICXOPT` to set CPU architecture optimization options. For experiments reported in the paper (Intel Xeon Platinum 8268) we set `-march=cascadelake` for Intel Xeon nodes.
+
+```
+#Initialize oneAPI e.g.,    . /opt/intel/oneapi/setvars.sh
+./cmake-compile-icpx.sh 
+```
+
+### AMD AOCC compiler with AMD AOCL library 
+This compiler is Clang++ variant heavily modified by AMD. You probably have to set the `LD_LIBRARY_PATH` variable to add runtime libraries required by the compiler.
+
+Use the environment variable `AOCCOPT` to set CPU architecture optimization options. For experiments reported in the paper AMD EPYC 7402) we set `-march=znver2`. You have to set the `AOCL_ROOT` environment variable to the location of AOCL. For the newest AOCL 5.3 you **have to use single-threaded (ST) variant**
+
+
+
+```
+#Initialize oneAPI (required for MPI) . /opt/intel/oneapi/setvars.sh or setup your MPI library
+./cmake-compile-aocc.sh 
+```
+
+
+
+
+
+## Location and the names of compiled executables 
+The compiled and installed binaries are in the `~/bin` directory. The following binaries should be created (all have long suffixed names depending on project options, e.g., the compiler, OpenMP setting):
 - eminit_*  creates the initial condition for the EM algorithm and stores it in a file with the name specified in the command line (OpenMP only variant or sequential variant depending on the USE_OPENMP flag)
 - em2_*  runs the EM algorithm (OpenMP only variant or sequential variant depending on the USE_OPENMP flag)
 - mpiem2_*  runs the EM algorithm (MPI/OpenMP variant or MPI only variant depending on the USE_OPENMP flag)
 
 
 ## Environment variables
-- ICCOPT: CPU architecture optimization options for the Intel compiler. For experiments reported in the paper (Intel Xeon Platinum 8268) we set -march=cascadelake
 - GCCOPT: CPU architecture optimization options for the GNU compiler. 
 
 ## Data format
