@@ -12,7 +12,7 @@ AMD AOCC (`AMD clang version 17.0.6 (CLANG: AOCC_5.0.0-Build#1377 2024_09_24)`).
 - Intel OneAPI toolkit for Intel systems. See instruction [here](https://www.intel.com/content/www/us/en/docs/oneapi/installation-guide-linux/2024-2/apt.html). Both the basekit and the HPC kit are required. To replicate exactly the experiments from the paper using icpc compiler please install an older version using the command `apt install intel-basekit-2023.2.0 intel-hpckit-2023.2.0` (for Debian-based systems) 
 as the newest versions lack `icpc`. Note: icpc compiler breaks down compilation on 
 newer Linux systems. In such case use Intel icpx or g++ compiler.
-- [AMD AOCC compiller] (https://www.amd.com/en/developer/aocc.html) and [AMD AOCL library](https://www.amd.com/en/developer/aocl.html) for AMD EPYC systems. Note that you still need an MPI library (we used MPI from Intel oneAPI in our EPYC experiments)
+- [AMD AOCC compiller](https://www.amd.com/en/developer/aocc.html) and [AMD AOCL library](https://www.amd.com/en/developer/aocl.html) for AMD EPYC systems. Note that you still need an MPI library (we used MPI from Intel oneAPI in our EPYC experiments)
 ## Installation of git submodule with Eigen C++ library
 ```
 git submodule update --init
@@ -47,12 +47,13 @@ Use the environment variable `ICXOPT` to set CPU architecture optimization optio
 ### AMD AOCC compiler with AMD AOCL library 
 This compiler is Clang++ variant heavily modified by AMD. You probably have to set the `LD_LIBRARY_PATH` variable to add runtime libraries required by the compiler.
 
-Use the environment variable `AOCCOPT` to set CPU architecture optimization options. For experiments reported in the paper AMD EPYC 7402) we set `-march=znver2`. You have to set the `AOCL_ROOT` environment variable to the location of AOCL. For the newest AOCL 5.3 you **have to use single-threaded (ST) variant**
+Use the environment variable `AOCCOPT` to set CPU architecture optimization options. For experiments reported in the paper AMD EPYC 7402) we set `-march=znver2`. You have to set the `AOCL_ROOT` environment variable to the location of AOCL. For the newest AOCL 5.3 you **have to use the single-threaded (ST) variant**
 
 
 
 ```
-#Initialize oneAPI (required for MPI) . /opt/intel/oneapi/setvars.sh or setup your MPI library
+#Initialize oneAPI (required for MPI) or setup your own MPI library    
+ . /opt/intel/oneapi/setvars.sh 
 ./cmake-compile-aocc.sh 
 ```
 
