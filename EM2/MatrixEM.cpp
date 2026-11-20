@@ -7,6 +7,8 @@
 #include "../Util/ITAC.h"
 #include "../Util/Profiler.h"
 #include "../Util/OpenMP.h"
+#include "../Util/Likwid.h"
+
 #include "MatrixEM.h"
 #include "EMException.h"
 
@@ -314,6 +316,8 @@ void SimpleMatrixEM::PrecomputeDensityMatrix() {
     __EVENT_PROFILE_START("EStep");
 #pragma omp parallel  default (none) firstprivate(nRows) shared(LogDensCoeffs,MappedData,MappedPosteriors,stderr) reduction(+:LogLike)
     {
+
+        __likwid_markerStartRegion("EStep");
         long nBlocks=BMDens.GetBlockCount();
         int tid=omp_get_thread_num();
         long PartitionStart,PartitionCount;
@@ -324,6 +328,7 @@ void SimpleMatrixEM::PrecomputeDensityMatrix() {
             BlockDensities(LogDensCoeffs, MappedData, MappedPosteriors, ThreadInfo[tid].TempDataset,
                            ThreadInfo[tid].LocalWeightDens, PartitionStart + Offset, Count, LogLike);
         }
+        __likwid_markerStopRegion("EStep");
     }
     eigen_enable_malloc();
     _vt_end(regionDensities);
@@ -418,6 +423,7 @@ void SimpleMatrixEM::doMStep(const LargeMatrix<OPTFLOAT> &Data,const LargeMatrix
     __EVENT_PROFILE_START("MStep covariances");
 #pragma omp parallel default(none) firstprivate(nRows) shared(MappedPosteriors,MappedData,Means)
     {
+        __likwid_markerStartRegion("MStep covariances");
         int tid=omp_get_thread_num();
         auto &TempDataset=ThreadInfo[tid].TempDataset;
         long Offset,Count;
@@ -432,6 +438,7 @@ void SimpleMatrixEM::doMStep(const LargeMatrix<OPTFLOAT> &Data,const LargeMatrix
             BlockCovariances(Means, MappedData, MappedPosteriors, tid, TempDataset, PartitionStart+Offset, Count);
         }
         Step2CovSums[tid].PackInPlace();
+        __likwid_markerStopRegion("MStep covariances");
     }
     _vt_end(regionMStepCovs);
     __EVENT_PROFILE_STOP("MStep covariances");
