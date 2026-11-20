@@ -97,6 +97,8 @@ void RunEM() {
 #pragma omp  parallel
         {
             __likwid_markerStartRegion("Benchmark");
+			__likwid_markerResetRegion("EStep");
+			__likwid_markerResetRegion("MStep");
         }
         T.Reset();
 #ifdef INTEL_ITT

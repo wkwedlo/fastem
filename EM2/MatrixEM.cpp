@@ -423,7 +423,7 @@ void SimpleMatrixEM::doMStep(const LargeMatrix<OPTFLOAT> &Data,const LargeMatrix
     __EVENT_PROFILE_START("MStep covariances");
 #pragma omp parallel default(none) firstprivate(nRows) shared(MappedPosteriors,MappedData,Means)
     {
-        __likwid_markerStartRegion("MStep covariances");
+        __likwid_markerStartRegion("MStep");
         int tid=omp_get_thread_num();
         auto &TempDataset=ThreadInfo[tid].TempDataset;
         long Offset,Count;
@@ -438,7 +438,7 @@ void SimpleMatrixEM::doMStep(const LargeMatrix<OPTFLOAT> &Data,const LargeMatrix
             BlockCovariances(Means, MappedData, MappedPosteriors, tid, TempDataset, PartitionStart+Offset, Count);
         }
         Step2CovSums[tid].PackInPlace();
-        __likwid_markerStopRegion("MStep covariances");
+        __likwid_markerStopRegion("MStep");
     }
     _vt_end(regionMStepCovs);
     __EVENT_PROFILE_STOP("MStep covariances");

@@ -26,12 +26,17 @@ extern inline void __likwid_markerStartRegion(const char *name) {
 extern inline void __likwid_markerStopRegion(const char *name) {
     likwid_markerStopRegion(name);
 }
+
+extern inline void __likwid_markerResetRegion(const char *name) {
+    likwid_markerResetRegion(name);
+}
 #else
     extern inline void __likwid_markerInit() {}
     extern inline void __likwid_markerThreadInit() {}
     extern inline void __likwid_markerClose() {}
     extern inline void __likwid_markerStartRegion(const char *name) {}
     extern inline void __likwid_markerStopRegion(const char *name) {}
+    extern inline void __likwid_markerResetRegion(const char *name) {}
 #endif
 
 #endif //CLUST_LIKWID_H
