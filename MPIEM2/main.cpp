@@ -185,6 +185,8 @@ int main(int argc, char *argv[])
 #pragma omp  parallel
             {
                 __likwid_markerStartRegion("Benchmark");
+				__likwid_markerResetRegion("EStep");
+				__likwid_markerResetRegion("MStep");
             }
 			__RESET_PROFILES;
             if (burnin>0) {
